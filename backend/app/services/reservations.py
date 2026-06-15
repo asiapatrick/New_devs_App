@@ -1,19 +1,44 @@
 from datetime import datetime
 from decimal import Decimal
 from typing import Dict, Any, List
+import pytz
+
+async def _get_property_timezone(property_id: str, db_session=None) -> str:
+    """Fetch the IANA timezone string for a property, defaulting to UTC."""
+    if db_session is None:
+        return "UTC"
+    try:
+        from sqlalchemy import text
+        result = await db_session.execute(
+            text("SELECT timezone FROM properties WHERE id = :pid"),
+            {"pid": property_id},
+        )
+        row = result.fetchone()
+        return row.timezone if row and row.timezone else "UTC"
+    except Exception:
+        return "UTC"
 
 async def calculate_monthly_revenue(property_id: str, month: int, year: int, db_session=None) -> Decimal:
     """
-    Calculates revenue for a specific month.
+    Calculates revenue for a specific month, using the property's local timezone
+    to define month boundaries before converting to UTC for the query.
     """
+    tz_name = await _get_property_timezone(property_id, db_session)
+    tz = pytz.timezone(tz_name)
 
-    start_date = datetime(year, month, 1)
+    # Build month boundaries in the property's local time, then convert to UTC.
+    local_start = tz.localize(datetime(year, month, 1))
     if month < 12:
-        end_date = datetime(year, month + 1, 1)
+        local_end = tz.localize(datetime(year, month + 1, 1))
     else:
-        end_date = datetime(year + 1, 1, 1)
-        
-    print(f"DEBUG: Querying revenue for {property_id} from {start_date} to {end_date}")
+        local_end = tz.localize(datetime(year + 1, 1, 1))
+
+    start_date = local_start.astimezone(pytz.utc)
+    end_date = local_end.astimezone(pytz.utc)
+
+    print(f"DEBUG: Property timezone: {tz_name}")
+    print(f"DEBUG: Local month boundaries: {local_start} → {local_end}")
+    print(f"DEBUG: UTC query boundaries:   {start_date} → {end_date}")
 
     # SQL Simulation (This would be executed against the actual DB)
     query = """
@@ -37,11 +62,12 @@ async def calculate_total_revenue(property_id: str, tenant_id: str) -> Dict[str,
     """
     try:
         # Import database pool
-        from app.core.database_pool import DatabasePool
+        # from app.core.database_pool import DatabasePool
         
-        # Initialize pool if needed
-        db_pool = DatabasePool()
-        await db_pool.initialize()
+        # # Initialize pool if needed
+        # db_pool = DatabasePool()
+        # await db_pool.initialize()
+        from app.core.database_pool import db_pool
         
         if db_pool.session_factory:
             async with db_pool.get_session() as session:
