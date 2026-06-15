@@ -1,0 +1,19 @@
+git url
+https://github.com/asiapatrick/New_devs_App
+
+loom
+https://www.loom.com/share/43585edc6a97433eb643a73d072d6f4e
+
+---
+
+Additional Note (not covered in Loom video due to time):
+
+Bug 3 - Frontend Rounding Precision (RevenueSummary.tsx)
+
+After recording the Loom, I identified a third bug causing the finance team's "few cents off" issue.
+
+Root cause: In frontend/src/components/RevenueSummary.tsx (line 64), the total revenue was being rounded to 2 decimal places using Math.round(data.total_revenue * 100) / 100 before display. Since the database stores total_amount as NUMERIC(10, 3), any value with a third decimal (e.g. $1234.567) would be displayed as $1234.57 — dropping a fraction of a cent.
+
+Fix: Removed the Math.round call and updated maximumFractionDigits from 2 to 3 so the displayed value matches the stored precision exactly.
+
+Commit: 0957d5e93
